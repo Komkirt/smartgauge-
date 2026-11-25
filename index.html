@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="th"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SMART GAUGE">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="icon.png">
+<title>SMART GAUGE</title>
+<style>
+@font-face{font-family:SG;src:url(f.woff2) format("woff2");font-weight:700;font-style:italic}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+html,body{margin:0;height:100%;background:#000;color:#fff;overflow:hidden;font-family:-apple-system,"Thonburi",sans-serif}
+#app{position:fixed;inset:0;display:flex;flex-direction:column;padding:env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)}
+#stage{flex:1;position:relative;overflow:hidden}
+#box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%)}
+#bg,#cv{position:absolute;left:0;top:0;width:100%;height:100%}
+#bar{height:calc(54px + env(safe-area-inset-bottom));padding:6px 8px calc(6px + env(safe-area-inset-bottom));display:flex;gap:6px;align-items:center;
+ background:linear-gradient(#06090f,#020306);border-top:2px solid var(--acc);box-shadow:0 -2px 10px var(--acc)}
+.b{flex:0 0 auto;height:40px;padding:0 12px;border:1.5px solid color-mix(in srgb,var(--acc) 70%,#000);color:#cfd8e3;background:#05080e;
+ font:700 15px -apple-system,sans-serif;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px)}
+.b.on{background:linear-gradient(color-mix(in srgb,var(--acc) 85%,#fff),color-mix(in srgb,var(--acc) 55%,#000));color:#fff;border-color:#fff}
+#st{flex:1;min-width:0;font-size:12px;color:#8fa3c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+#dot{width:9px;height:9px;border-radius:50%;background:#ef4444;flex:0 0 auto}
+#ov{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center;z-index:5}
+#pn{width:min(560px,92vw);max-height:88vh;overflow:auto;background:#060a12;border:2px solid var(--acc);box-shadow:0 0 18px var(--acc);padding:16px 18px;
+ clip-path:polygon(22px 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%,0 22px)}
+#pn h2{margin:0 0 10px;color:var(--acc);font-size:22px}
+.row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #1d2b3d}
+.row .t{flex:1}.row small{display:block;color:#8fa3c0;font-size:12px}
+.st{display:flex;align-items:center;gap:8px}.st span{min-width:64px;text-align:center;font:700 italic 22px SG,sans-serif}
+.st .b{width:44px;padding:0;font-size:22px}
+.chip{width:34px;height:34px;border-radius:50%;border:3px solid transparent;color:#fff;font-weight:700}
+.chip.on{border-color:#fff}
+.btns{display:flex;gap:10px;margin-top:14px}.btns .b{flex:1;height:46px}
+#rot{position:fixed;inset:0;background:#000;display:none;align-items:center;justify-content:center;flex-direction:column;gap:12px;z-index:9;text-align:center;color:#cfd8e3}
+@media (orientation:portrait){#rot{display:flex}}
+</style></head><body>
+<div id="blec" style="position:fixed;inset:0;z-index:8;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px;text-align:center;padding:20px">
+ <div style="font:700 26px -apple-system,sans-serif;color:var(--acc)">SMART GAUGE</div>
+ <div id="blem" style="white-space:pre-line;color:#cfd8e3;font-size:16px;max-width:520px;line-height:1.5">เปิดกุญแจรถ แล้วกดเชื่อมต่อ</div>
+ <button class="b" id="bleb" style="height:56px;padding:0 34px;font-size:20px">เชื่อมต่อเกจ (บลูทูธ)</button>
+</div>
+<div id="app">
+ <div id="stage"><div id="box"><img id="bg" src="bg.jpg" alt=""><canvas id="cv"></canvas></div></div>
+ <div id="bar">
+  <button class="b" id="bm">☰</button>
+  <button class="b on" data-p="0">เรียลไทม์</button>
+  <button class="b" data-p="1">DATA</button>
+  <button class="b" data-p="2">รหัสเสีย</button>
+  <button class="b" data-p="3">ตาราง</button>
+  <div id="st">กำลังเชื่อมต่อเกจ...</div><div id="dot"></div>
+ </div>
+</div>
+<div id="ov"><div id="pn"></div></div>
+<div id="rot"><div style="font-size:54px">⟲</div><div style="font-size:20px;font-weight:700">หมุนมือถือเป็นแนวนอน</div><div style="font-size:14px;color:#8fa3c0">SMART GAUGE ใช้งานแบบจอแนวนอน</div></div>
+<script>
+"use strict";
+// ---------- ค่าตั้ง (เก็บในมือถือ) ----------
+const THEMES=[["น้ำเงิน","#1e8fff",0],["แดง","#ff3344",150],["เขียว","#22e06a",-85],["ส้ม","#ff9a1f",177],["ม่วง","#b45cff",65],["ฟ้า","#22d3ee",-25]];
+let S={th:0,max:12000,red:9500,warn:105};
+try{Object.assign(S,JSON.parse(localStorage.getItem("sg")||"{}"))}catch(e){}
+let TOP={spd:0,rpm:NaN,afr:NaN,at:0};
+try{Object.assign(TOP,JSON.parse(localStorage.getItem("sgtop")||"{}"))}catch(e){}
+function saveS(){try{localStorage.setItem("sg",JSON.stringify(S))}catch(e){}}
+function saveTop(){try{localStorage.setItem("sgtop",JSON.stringify(TOP))}catch(e){}}
+const ACC=()=>THEMES[S.th][1];
+function applyTheme(){document.documentElement.style.setProperty("--acc",ACC());
+ document.getElementById("bg").style.filter=S.th?`hue-rotate(${THEMES[S.th][2]}deg) saturate(1.25)`:"none"}
+applyTheme();
+
+// ---------- สี ----------
+const RED="#ef4444",REDL="#ff2d3a",LIME="#a3e635",AMBER="#fbbf24",MUTE="#8fa3c0",GREY="#cfd8e3",DIM="#1a222e";
+function mix(a,b,t){const p=x=>[1,3,5].map(i=>parseInt(x.substr(i,2),16));const A=p(a),B=p(b);
+ return "#"+A.map((v,i)=>Math.round(v+(B[i]-v)*t).toString(16).padStart(2,"0")).join("")}
+const LIGHT=()=>mix(ACC(),"#ffffff",.55);
+function segc(i,n){return mix(mix(ACC(),"#000000",.15),LIGHT(),n<=1?0:.85*i/(n-1))}
+
+// ---------- ค่าสด ----------
+let D=null,lastOk=0;
+function parse(h){const p=[];for(let i=0;i<40;i+=2)p.push(parseInt(h.substr(i,2),16));
+ const u16=i=>p[i]|(p[i+1]<<8),f8=(i,k,o)=>p[i]==255?NaN:(p[i]-o)/k,f16=(i,k)=>u16(i)==0xFFFF?NaN:u16(i)/k,f=p[0];
+ return{online:!!(f&1),gps:!!(f&2),pro:!!(f&4),demo:!!(f&8),rpm:f16(1,1),spd:f16(3,10),tps:f8(5,2,0),ect:f8(6,1,40),iat:f8(7,1,40),
+  map:f8(8,1,0),afr:f8(9,10,0),ign:p[10]==0x80?NaN:((p[10]<<24)>>24)/2,inj:f16(11,100),bat:f8(13,10,0),gtop:f16(14,10),
+  sats:p[16],mil:p[17]==255?-1:p[17],o2:f8(18,100,0),isc:f8(19,1,0)}}
+function fmt(v,d){return v==null||isNaN(v)?"--":v.toFixed(d)}
+// ดึงข้อมูลแบบมีเวลาหมด: แพ็กเก็ตหายกลางทาง ไม่ค้างรอ (เดิมรอได้เป็นนาที = หน้าเว็บค้าง)
+async function getT(u,ms){const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),ms);
+ try{const r=await fetch(u,{cache:"no-store",signal:ac.signal});return await r.text()}finally{clearTimeout(tm)}}
+function gotLive(t){if(t&&t.length>=40){D=parse(t);lastOk=Date.now();trackTop()}}
+// ค่าสดแบบสตรีม: เกจส่งมาเองทุก 0.1 วิ ผ่านสายเดียวที่เปิดค้างไว้ (ไม่ต้องขอทีละครั้ง = ไวกว่ามาก)
+let es=null,esAt=0;
+function openStream(){if(!window.EventSource)return;try{es&&es.close()}catch(e){}
+ es=new EventSource("/ev");es.onmessage=e=>{esAt=Date.now();gotLive(e.data)};
+ es.onerror=()=>{if(es.readyState===2)setTimeout(openStream,1500)}}
+// สำรอง: สตรีมเงียบเกิน 0.8 วิ -> ขอค่าแบบเดิมไปก่อน
+async function pollLive(){
+ if(Date.now()-esAt<800){setTimeout(pollLive,200);return}
+ try{gotLive(await getT("/live",1200))}catch(e){}
+ if(Date.now()-esAt>4000&&es&&es.readyState!==1)openStream();
+ setTimeout(pollLive,80)}
+let prevSpd=NaN,prevAt=0;
+function trackTop(){const s=D.spd,now=Date.now();if(isNaN(s)||D.demo){prevSpd=NaN;return}
+ // กันค่ากระโดด (GPS เด้ง): ขึ้นเร็วเกิน 40 km/h ใน 1 วิ ไม่นับ
+ if(!isNaN(prevSpd)&&now-prevAt<1500&&s-prevSpd>40*(now-prevAt)/1000+3){prevAt=now;return}
+ prevSpd=s;prevAt=now;
+ if(s>TOP.spd+0.05){TOP={spd:s,rpm:D.rpm,afr:D.afr,at:now};if(!trackTop.t||now-trackTop.t>2000){trackTop.t=now;saveTop()}}}
+
+// ---------- คำสั่ง / ข้อความจากเกจ (รหัสเสีย) ----------
+let DTC={loaded:false,busy:false,codes:[],msg:"กด \"อ่านรหัส\" เพื่อดูรหัสเสีย (เปิดกุญแจรถ)",mc:MUTE};
+// ===== ช่องทางเชื่อมต่อ: เปิดจากเว็บ https (GitHub Pages ในแอพ Bluefy) = บลูทูธ / เปิดจาก 192.168.4.1 = WiFi ของเกจ =====
+const VIA_BLE=location.protocol==="https:";
+const SVC="53470001-8a3b-4c2d-9f10-5a6d61727447",U_LIVE="53470002-8a3b-4c2d-9f10-5a6d61727447",U_CMD="53470003-8a3b-4c2d-9f10-5a6d61727447",U_DATA="53470004-8a3b-4c2d-9f10-5a6d61727447";
+let bDev=null,bCmd=null,bOn=false,bBuf=[],bBusy=false;
+const hex2=b=>Array.from(b,x=>(x<16?"0":"")+x.toString(16).toUpperCase()).join("");
+function bleUi(msg){const o=document.getElementById("blec");o.style.display=bOn?"none":"flex";if(msg)document.getElementById("blem").textContent=msg}
+async function bleSetup(){
+ const g=await bDev.gatt.connect(),sv=await g.getPrimaryService(SVC);
+ const lv=await sv.getCharacteristic(U_LIVE),dt=await sv.getCharacteristic(U_DATA);bCmd=await sv.getCharacteristic(U_CMD);
+ lv.addEventListener("characteristicvaluechanged",e=>gotLive(hex2(new Uint8Array(e.target.value.buffer))));
+ dt.addEventListener("characteristicvaluechanged",e=>{const v=new Uint8Array(e.target.value.buffer);if(!v.length)return;
+  const n=Math.min(v[0]&127,v.length-1);for(let i=1;i<=n;i++)bBuf.push(v[i]);
+  if(v[0]&128){const m=new TextDecoder().decode(new Uint8Array(bBuf));bBuf=[];onMsg(m)}});
+ await lv.startNotifications();await dt.startNotifications();
+ bOn=true;bleUi();if(page==3)mapReq()}
+async function bleConnect(){
+ if(!navigator.bluetooth){bleUi("เบราว์เซอร์นี้ใช้บลูทูธไม่ได้\nให้เปิดลิงก์นี้ในแอพ Bluefy (โหลดฟรีใน App Store)\nหรือต่อ WiFi ของเกจ แล้วเปิด 192.168.4.1");return}
+ if(bBusy)return;bBusy=true;bleUi("กำลังเชื่อมต่อ...");
+ try{if(!bDev){bDev=await navigator.bluetooth.requestDevice({filters:[{services:[SVC]}]});
+   bDev.addEventListener("gattserverdisconnected",bleLost)}
+  await bleSetup()}
+ catch(e){bOn=false;bleUi("เชื่อมต่อไม่สำเร็จ ลองกดอีกครั้ง\n(เปิดกุญแจรถ และเปิดบลูทูธที่เกจ)")}
+ bBusy=false}
+// หลุด: ลองต่อใหม่เองสูงสุด 10 ครั้ง (ไม่ต้องเลือกเครื่องใหม่)
+async function bleLost(){bOn=false;bBuf=[];bleUi("สัญญาณหลุด กำลังต่อใหม่...");
+ for(let i=0;i<10&&!bOn;i++){await new Promise(r=>setTimeout(r,1500));try{await bleSetup()}catch(e){}}
+ if(!bOn)bleUi("หลุดการเชื่อมต่อ กดเชื่อมต่อใหม่")}
+let bQ=Promise.resolve();
+function bleCmd(c){bQ=bQ.then(()=>bOn&&bCmd?(bCmd.writeValueWithoutResponse?bCmd.writeValueWithoutResponse(new TextEncoder().encode(c)):bCmd.writeValue(new TextEncoder().encode(c))):0).catch(()=>{})}
+async function cmd(c){if(VIA_BLE){if(c!=="m")bleCmd(c);return}
+ for(let i=0;i<3;i++){try{await getT("/cmd?c="+c,1500);return}catch(e){}}}
+async function pollMsg(){
+ // หน้าตาราง: เกจเงียบเกิน 4 วิ (หลุดแล้วต่อใหม่ / คำสั่งหาย) -> ขอตารางใหม่เอง
+ if(page==3&&Date.now()-lastOk<1500&&Date.now()-MP.last>4000&&Date.now()-MP.req>4000){if(!MP.rows)MP.status="กำลังโหลด...";mapReq()}
+ if(DTC.busy||page==3){try{const t=await getT("/msg",2500);t.split("\n").forEach(onMsg)}catch(e){}}
+ setTimeout(pollMsg,300)}
+function onMsg(m){if(!m)return;const f=m.split("|");if("MAPH M U MAPE MAPC".split(" ").includes(f[0]))MP.last=Date.now();
+ switch(f[0]){
+  case"MAPH":mapBegin(f);break;
+  case"M":mapRow(f);break;
+  case"U":mapLive(f);break;
+  case"MAPE":MP.status="อัปเดตสดจากเกจ";break;
+  case"MAPC":MP.status="ล้างตารางในเกจแล้ว";break;
+  case"DTCN":DTC.busy=false;DTC.msg="ยังไม่ได้ต่อกล่อง ECU";DTC.mc=AMBER;break;
+  case"DTCS":DTC.msg="กำลังอ่าน...";DTC.mc=LIME;break;
+  case"DTC":DTC.codes=[];break;
+  case"C":if(f[2]==="1")DTC.codes.push({code:f[1],th:f[3]||"",en:f[4]||""});break;
+  case"CLR":DTC.msg=f[1]==="1"?"ลบรหัสแล้ว":"ลบไม่สำเร็จ";DTC.mc=f[1]==="1"?LIME:RED;break;
+  case"DTCE":DTC.busy=false;DTC.loaded=true;if(DTC.msg==="กำลังอ่าน...")DTC.msg="อ่านเสร็จ";DTC.mc=LIME;break;
+  case"DTCF":DTC.busy=false;DTC.msg="อ่านไม่สำเร็จ ลองใหม่";DTC.mc=RED;break;}}
+function readDtc(){if(DTC.busy)return;DTC.busy=true;DTC.msg="กำลังอ่าน...";DTC.mc=LIME;cmd("D")}
+function clearDtc(){if(DTC.busy)return;if(!confirm("ลบรหัสเสียทั้งหมดในกล่อง ECU?\n(เปิดกุญแจไว้ ไม่ต้องติดเครื่อง)"))return;
+ DTC.busy=true;DTC.msg="กำลังลบ...";DTC.mc=AMBER;cmd("X")}
+
+// ---------- วาด ----------
+const W=1820,H=802,cv=document.getElementById("cv"),ctx=cv.getContext("2d"),box=document.getElementById("box"),bgImg=document.getElementById("bg");
+let page=0,sc=1;
+function layout(){const st=document.getElementById("stage"),w=st.clientWidth,h=st.clientHeight;sc=Math.min(w/W,h/H);
+ box.style.width=W*sc+"px";box.style.height=H*sc+"px";const dpr=Math.min(2.5,window.devicePixelRatio||1);
+ cv.width=Math.round(W*sc*dpr);cv.height=Math.round(H*sc*dpr);ctx.setTransform(sc*dpr,0,0,sc*dpr,0,0)}
+let lw=0,lh=0;
+function relayout(){const st=document.getElementById("stage");if(st.clientWidth!==lw||st.clientHeight!==lh){lw=st.clientWidth;lh=st.clientHeight;layout()}}
+// iPhone หมุนจอ / แถบ Safari ยุบ: ขนาดจริงมาช้ากว่า event -> เช็คซ้ำทุกเฟรม
+["resize","orientationchange","pageshow"].forEach(e=>window.addEventListener(e,()=>{relayout();setTimeout(relayout,300);setTimeout(relayout,800)}));
+const NUM=(s)=>`italic 700 ${s}px SG,-apple-system,sans-serif`,LBL=(s)=>`700 ${s}px -apple-system,"Thonburi",sans-serif`;
+function T(s,x,y,size,col,al="center",font){ctx.font=(font||LBL)(size);ctx.fillStyle=col;ctx.textAlign=al;ctx.textBaseline="middle";ctx.fillText(s,x,y)}
+function N(s,x,y,size,col,al="center"){T(s,x,y,size,col,al,NUM)}
+function poly(pts,fill,glow){ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();
+ if(glow){ctx.shadowColor=fill;ctx.shadowBlur=14}ctx.fillStyle=fill;ctx.fill();ctx.shadowBlur=0}
+function line(x1,y1,x2,y2,w,col){ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.lineWidth=w;ctx.strokeStyle=col;ctx.stroke()}
+function seg(l,r,y,h,n,frac,redFrom){frac=isNaN(frac)?0:Math.max(0,Math.min(1,frac));const on=Math.round(frac*n),sw=(r-l)/n;
+ for(let i=0;i<n;i++){const x=l+i*sw;poly([[x+2,y+h],[x+sw-4,y+h],[x+sw+2,y],[x+8,y]],i<on?((i+.5)/n>=redFrom?"#ff3b47":segc(i,n)):DIM)}}
+function c01(v){return isNaN(v)?0:Math.max(0,Math.min(1,v))}
+function afrZ(v){return v<13.2?RED:v<=15.4?LIME:AMBER}
+function frame(x,y,w,h,k){k=k||1;const c1=40*k,c2=18*k,c3=40*k,c4=10*k,a=ACC();
+ const P=[[x+c1,y],[x+w-c2,y],[x+w,y+c2],[x+w,y+h-c3],[x+w-c3,y+h],[x+c4,y+h],[x,y+h-c4],[x,y+c1]];
+ ctx.beginPath();P.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.closePath();
+ const g=ctx.createLinearGradient(0,y,0,y+h);g.addColorStop(0,"#0b1220");g.addColorStop(1,"#020306");ctx.fillStyle=g;ctx.fill();
+ ctx.lineWidth=1.8;ctx.strokeStyle="#c8d4e2";ctx.stroke();
+ const gl=(pts,w)=>{ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.lineCap="round";ctx.lineJoin="round";
+  ctx.shadowColor=a;ctx.shadowBlur=12;ctx.lineWidth=w;ctx.strokeStyle=a;ctx.stroke();ctx.shadowBlur=0;ctx.lineWidth=2.2;ctx.strokeStyle=mix(a,"#ffffff",.6);ctx.stroke()};
+ gl([[x,y+c1+(h-c1)*.35],[x,y+h-c4],[x+c4,y+h],[x+w*.3,y+h]],6);
+ gl([[x+w*.55,y],[x+w-c2,y],[x+w,y+c2]],6);
+ gl([[x+w,y+h-c3-30],[x+w,y+h-c3],[x+w-c3,y+h]],5)}
+function status(){if(!D||Date.now()-lastOk>2500)return[VIA_BLE?"ไม่ได้เชื่อมต่อเกจ (บลูทูธ)":"ไม่ได้เชื่อมต่อเกจ (ต่อ WiFi ของเกจ)",RED];
+ let s=D.demo?"โหมดตัวอย่าง":D.online?"ECU ✓":"ยังไม่ได้ต่อกล่อง ECU";if(D.pro)s+=D.gps?"   GPS "+D.sats:"   GPS หาดาว";
+ if(D.mil>0)s+="   ⚠ รหัสเสีย "+D.mil;return[s,D.online||D.demo?LIME:AMBER]}
+
+// ----- หน้าเรียลไทม์ (ทับรูป bg.jpg) -----
+let shown=0;
+function drawDash(d){const acc=ACC(),GX=910,GY=320,A0=128,A1=392,R0=252,max=S.max,red=S.red;
+ const tgt=isNaN(d.rpm)?0:d.rpm;shown+=(tgt-shown)*.3;const hot=shown>=red;
+ for(let k=0;k<=max/500;k++){const v=k*500,an=(A0+(A1-A0)*v/max)*Math.PI/180,mj=k%2==0,cs=Math.cos(an),sn=Math.sin(an),r1=R0-(mj?34:20),col=v>=red?REDL:"#f2f6fb";
+  line(GX+cs*R0,GY+sn*R0,GX+cs*r1,GY+sn*r1,mj?7:3,col);if(mj)N(String(v/1000),GX+cs*(R0-62),GY+sn*(R0-62),36,col)}
+ const ar=(A0+(A1-A0)*Math.min(1,red/max))*Math.PI/180;
+ ctx.beginPath();ctx.arc(GX,GY,262,ar,A1*Math.PI/180);ctx.lineWidth=10;ctx.strokeStyle=REDL;ctx.shadowColor=REDL;ctx.shadowBlur=14;ctx.lineCap="butt";ctx.stroke();ctx.shadowBlur=0;
+ const an=(A0+(A1-A0)*c01(shown/max))*Math.PI/180,ap=an+Math.PI/2;
+ poly([[GX+Math.cos(an)*232,GY+Math.sin(an)*232],[GX+Math.cos(ap)*12,GY+Math.sin(ap)*12],[GX-Math.cos(ap)*12,GY-Math.sin(ap)*12]],hot?REDL:mix(acc,"#ffffff",.6),true);
+ ctx.beginPath();ctx.arc(GX,GY,26,0,7);ctx.fillStyle="#02060c";ctx.fill();ctx.lineWidth=5;ctx.strokeStyle=acc;ctx.stroke();
+ ctx.beginPath();ctx.arc(GX,GY,8,0,7);ctx.fillStyle=LIGHT();ctx.fill();
+ T("RPM x1000",GX,GY-92,22,"#b8c4d4","center",NUM);N(fmt(d.rpm,0),GX,GY-56,40,hot?REDL:LIGHT());
+ N(fmt(d.spd,0),GX,GY+112,116,"#fff");T("km/h",GX,GY+178,28,GREY,"center",NUM);
+ const left=(p,n,u,v,vc,dy)=>{T(n,p[0]+64,p[1]+62,38,acc,"left",NUM);if(u)T(u,p[0]+66,p[1]+102,26,GREY,"left",NUM);N(v,p[2]-74,p[1]+84+(dy||0),96,vc,"right")};
+ const right=(p,n,u,v,vc,th)=>{T(n,p[2]-64,p[1]+62,38,acc,"right",th?LBL:NUM);if(u)T(u,p[2]-66,p[1]+102,26,GREY,"right",NUM);N(v,p[0]+74,p[1]+84,96,vc,"left")};
+ left([31,61,597],"TPS","%",fmt(d.tps,0),"#fff");seg(95,513,199,16,20,(isNaN(d.tpsS)?d.tps:d.tpsS)/100,.86);
+ const ac=isNaN(d.afr)?MUTE:afrZ(d.afr);left([29,314,599],"AFR","",fmt(d.afr,1),ac,-16);
+ const l=93,r=515,y=432,z1=l+(r-l)*3.2/8,z2=l+(r-l)*5.4/8;
+ ctx.globalAlpha=.5;ctx.fillStyle=RED;ctx.fillRect(l,y,z1-3-l,12);ctx.fillStyle=LIME;ctx.fillRect(z1,y,z2-3-z1,12);ctx.fillStyle=AMBER;ctx.fillRect(z2,y,r-z2,12);ctx.globalAlpha=1;
+ [12,14,16].forEach(v=>N(String(v),l+(r-l)*(v-10)/8,y+40,20,MUTE));
+ if(!isNaN(d.afr)){const x=l+(r-l)*c01(((isNaN(d.afrS)?d.afr:d.afrS)-10)/8);ctx.fillStyle=ac;ctx.fillRect(x-9,y,18,12);line(x,y-9,x,y+21,4,"#fff")}
+ const w=S.warn,em=Math.max(120,w+10),ec=isNaN(d.ect)?"#fff":d.ect>=w?RED:d.ect>=w-10?AMBER:"#fff";
+ right([1222,61,1792],"น้ำ","°C",fmt(d.ect,0),ec,true);seg(1306,1728,199,16,20,(d.ect-40)/(em-40),(w-40)/(em-40));
+ right([1222,314,1792],"TOP SPEED","km/h",TOP.spd>0?fmt(TOP.spd,0):"--","#fff");
+ T(TOP.spd>0?"รอบ "+fmt(TOP.rpm,0)+"  •  AFR "+fmt(TOP.afr,1)+"  ›":"แตะดูรายละเอียด  ›",1298,450,24,MUTE,"left");
+ const bl=!isNaN(d.bat)&&d.bat<12,TI=[[34,327],[342,616],[630,902],[916,1191],[1208,1479],[1497,1784]];
+ const R=[["INJ",fmt(d.inj,2),"ms",d.inj/8],["IGN",fmt(d.ign,1),"°",d.ign/40],["MAP",fmt(d.map,0),"kPa",d.map/110],["BATT",fmt(d.bat,1),"V",(d.bat-10)/5],["IAT",fmt(d.iat,0),"°C",d.iat/80],["O2",fmt(d.o2,2),"V",d.o2]];
+ R.forEach((q,i)=>{const[x0,x1]=TI[i];T(q[0],x0+44,642,28,acc,"left",NUM);T(q[2],x0+46,676,22,GREY,"left",NUM);
+  N(q[1],x1-44,664,52,i==3&&bl?RED:"#fff","right");seg(x0+40,x1-48,722,12,12,q[3],2)});
+ if(!isNaN(d.ect)&&d.ect>=w){const on=(Date.now()/450|0)%2==0;ctx.fillStyle=on?"rgba(170,12,28,.92)":"rgba(60,6,12,.85)";ctx.fillRect(GX-250,6,500,58);
+  ctx.lineWidth=3;ctx.strokeStyle=RED;ctx.strokeRect(GX-250,6,500,58);T("⚠ เครื่องร้อน "+fmt(d.ect,0)+"°C",GX,35,34,"#fff")}}
+
+// ----- หน้า DATA -----
+function drawData(d){const acc=ACC();ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);frame(40,26,1740,100,.8);
+ T("DATA",96,76,44,acc,"left",NUM);T("ค่าทั้งหมด",260,78,26,MUTE,"left");
+ const w=S.warn,em=Math.max(120,w+10),ec=isNaN(d.ect)?"#fff":d.ect>=w?RED:d.ect>=w-10?AMBER:"#fff",bl=!isNaN(d.bat)&&d.bat<12;
+ const L=[["น้ำ","°C",fmt(d.ect,0),ec,(d.ect-40)/(em-40),(w-40)/(em-40),1],["MAP","kPa",fmt(d.map,0),"#fff",d.map/110,2],["IAT","°C",fmt(d.iat,0),"#fff",d.iat/80,2],
+  ["BATT","V",fmt(d.bat,1),bl?RED:"#fff",(d.bat-10)/5,2],["INJ","ms",fmt(d.inj,2),"#fff",d.inj/8,2],["IGN","°",fmt(d.ign,1),"#fff",d.ign/40,2],
+  ["ISC","",fmt(d.isc,0),"#fff",d.isc/150,2],["O2","V",fmt(d.o2,2),"#fff",d.o2,2],["AFR","",fmt(d.afr,1),isNaN(d.afr)?MUTE:afrZ(d.afr),(d.afr-10)/8,2],
+  ["TPS","%",fmt(d.tps,0),"#fff",d.tps/100,.86],["RPM","",fmt(d.rpm,0),d.rpm>=S.red?RED:"#fff",d.rpm/S.max,S.red/S.max],["SPEED","km/h",fmt(d.spd,0),"#fff",d.spd/200,2]];
+ L.forEach((q,i)=>{const x=40+(i%4)*440,y=156+(i/4|0)*198;frame(x,y,420,182,.65);
+  T(q[0],x+40,y+44,32,acc,"left",q[6]?LBL:NUM);if(q[1])T(q[1],x+42,y+84,22,GREY,"left",NUM);
+  N(q[2],x+384,y+82,78,q[3],"right");seg(x+40,x+380,y+132,12,16,q[4],q[5])});
+ if(TOP.spd>0)T("TOP SPEED  "+fmt(TOP.spd,0)+" km/h  •  รอบ "+fmt(TOP.rpm,0)+"  •  AFR "+fmt(TOP.afr,1),910,775,24,AMBER)}
+
+// ----- หน้ารหัสเสีย -----
+const BR=[1110,52,1410,126],BC=[1432,52,1732,126];
+function btn(r,col,label,on){const[l,t,rr,b]=r,k=14;poly([[l+k,t],[rr,t],[rr,b-k],[rr-k,b],[l,b],[l,t+k]],on?mix(col,"#000000",.25):"#05080e",on);
+ ctx.lineWidth=2.2;ctx.strokeStyle=mix(col,"#ffffff",.5);ctx.stroke();T(label,(l+rr)/2,(t+b)/2,30,"#fff")}
+function drawDtc(){const acc=ACC();ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);frame(40,26,1740,120);frame(40,176,1740,520);
+ T("รหัสเสีย",96,70,44,acc,"left");T("DTC",300,72,36,GREY,"left",NUM);
+ ctx.beginPath();ctx.arc(104,114,7,0,7);ctx.fillStyle=DTC.mc;ctx.fill();T(DTC.msg,124,114,22,DTC.mc===MUTE?GREY:DTC.mc,"left");
+ btn(BR,acc,"⟳  อ่านรหัส",!DTC.busy);btn(BC,"#ff3b47","✕  ลบรหัส",false);
+ T("รหัสเสียปัจจุบัน",96,220,34,RED,"left");
+ if(DTC.loaded){btn([1630,198,1742,244],RED,"",false);N(String(DTC.codes.length),1686,221,34,"#fff")}
+ if(!DTC.codes.length)T(DTC.loaded?"ไม่มีรหัสเสีย ✓":"กด \"อ่านรหัส\" เพื่อดูรหัสเสีย",910,470,DTC.loaded?44:30,DTC.loaded?LIME:MUTE);
+ DTC.codes.slice(0,3).forEach((k,i)=>{const y=276+i*120;ctx.fillStyle="#0a1424";ctx.fillRect(84,y,1652,104);ctx.lineWidth=1.5;ctx.strokeStyle="#1d3350";ctx.strokeRect(84,y,1652,104);
+  btn([100,y+18,246,y+86],RED,"",false);N(k.code,173,y+52,48,"#fff");T(k.th||k.en,272,y+38,28,"#fff","left");if(k.th&&k.en)T(k.en,272,y+76,20,MUTE,"left")});
+ if(DTC.codes.length>3)T("+ อีก "+(DTC.codes.length-3)+" รหัส",1736,664,22,MUTE,"right");
+ T("ลบรหัสตอนเปิดกุญแจ ไม่ต้องติดเครื่อง  •  ลบแล้วกลับมาขึ้นอีก = ยังเสียจริง ต้องตรวจซ่อม",910,740,22,MUTE)}
+
+
+// ---------- หน้าตาราง (รูปแบบข้อความเดียวกับแอพ: MAPH / M / U / MAPE) ----------
+const MP={rows:0,cols:0,rpm:[],tps:[],has:[],afr:[],ign:[],inj:[],tab:1,follow:true,curR:-1,curC:-1,sx:0,sy:0,status:"กด \"โหลดตาราง\" เพื่อดึงตารางที่เกจเก็บไว้",asked:false,last:0,req:0};
+function mapReq(){MP.req=Date.now();cmd("M")}
+const TL=78,TT=166,TR=1750,TB=712,HW=118,HH=46,TABX=380,TABW=220,TABG=14,TABT=44,TABB=108;
+const BF=[1100,44,1336,108],BCL=[1352,44,1528,108],BLD=[1544,44,1736,108],TABN=["หัวฉีด ms","AFR","องศาไฟ"];
+const hx=(s,c)=>parseInt(s.substr(c*2,2),16)||0;
+function mapBegin(f){MP.rows=+f[1];MP.cols=+f[2];MP.rpm=f[3].split(",").map(Number);MP.tps=f[4].split(",").map(Number);
+ const z=()=>Array.from({length:MP.rows},()=>new Array(MP.cols).fill(0));MP.has=z();MP.afr=z();MP.ign=z();MP.inj=z();MP.curR=MP.curC=-1;MP.sx=MP.sy=0;MP.status="กำลังโหลด..."}
+function mapRow(f){if(!MP.rows)return;const r=+f[1];if(!(r>=0&&r<MP.rows))return;
+ for(let c=0;c<MP.cols;c++){MP.has[r][c]=f[2][c]==="1";MP.afr[r][c]=hx(f[3],c)/20+8;MP.ign[r][c]=hx(f[4],c)/3-20;MP.inj[r][c]=hx(f[5],c)/30}}
+function mapLive(f){if(!MP.rows)return;const r=+f[1],c=+f[2];if(!(r>=0&&r<MP.rows&&c>=0&&c<MP.cols))return;
+ if(f[3]==="1"){MP.has[r][c]=true;MP.afr[r][c]=hx(f[4],0)/20+8;MP.ign[r][c]=hx(f[5],0)/3-20;MP.inj[r][c]=hx(f[6],0)/30}
+ MP.curR=r;MP.curC=c;if(MP.follow)mapToCursor()}
+const mcw=()=>MP.cols?Math.max(70,(TR-TL-HW)/MP.cols):70,mch=()=>MP.rows?Math.max(38,(TB-TT-HH)/MP.rows):38;
+function mapClamp(){MP.sx=Math.max(0,Math.min(MP.sx,Math.max(0,HW+MP.cols*mcw()-(TR-TL))));MP.sy=Math.max(0,Math.min(MP.sy,Math.max(0,HH+MP.rows*mch()-(TB-TT))))}
+function mapToCursor(){if(MP.curR<0)return;const CW=mcw(),CH=mch(),i=MP.rows-1-MP.curR;MP.sx=MP.curC*CW+CW/2-(TR-TL-HW)/2;MP.sy=i*CH+CH/2-(TB-TT-HH)/2;mapClamp()}
+const AFR_T=[11.5,12.5,13.0,13.6,14.4,15.2,16.0],AFR_C=["#2878ff","#28cdff","#3cdc6e","#96ff3c","#ffe128","#ff821e","#ff2832"],HEAT_T=[0,.5,.8,1],HEAT_C=["#3cdc6e","#ffe128","#ff821e","#ff2832"];
+function ramp(t,c,v){if(v<=t[0])return c[0];for(let i=1;i<t.length;i++)if(v<=t[i])return mix(c[i-1],c[i],(v-t[i-1])/(t[i]-t[i-1]));return c[c.length-1]}
+function cellCol(v){if(MP.tab==1)return ramp(AFR_T,AFR_C,v);return ramp(HEAT_T,HEAT_C,c01(MP.tab==0?v/5:(v+5)/45))}
+function hexA(c,a){return c+Math.round(a*255).toString(16).padStart(2,"0")}
+function drawMap(){const acc=ACC();ctx.fillStyle="#000";ctx.fillRect(0,0,W,H);frame(40,26,1740,100,.8);frame(40,140,1740,600);
+ T("ตาราง",90,64,40,acc,"left");T("อัปเดตสดตามช่องที่เครื่องใช้",90,104,20,MUTE,"left");
+ for(let i=0;i<3;i++){const l=TABX+i*(TABW+TABG);btn([l,TABT,l+TABW,TABB],acc,TABN[i],MP.tab==i)}
+ btn(BF,LIME,MP.follow?"ตามจุด: เปิด":"ตามจุด: ปิด",MP.follow);btn(BCL,"#ff3b47","ล้าง",false);btn(BLD,acc,"โหลดตาราง",false);
+ T(MP.status,60,772,22,MUTE,"left");
+ if(MP.tab==1){let lx=1060;[["หนา",12],["ดี",13.6],["เริ่มบาง",15],["บาง",15.9]].forEach(q=>{ctx.fillStyle=ramp(AFR_T,AFR_C,q[1]);ctx.fillRect(lx,762,26,18);T(q[0],lx+36,771,22,GREY,"left");lx+=160})}
+ if(!MP.rows){T("กดปุ่ม \"โหลดตาราง\" เพื่อดึงตารางที่เกจเก็บไว้",910,440,30,GREY);return}
+ mapClamp();const CW=mcw(),CH=mch(),txt=Math.min(CH*.52,CW*.30),V=MP.tab==0?MP.inj:MP.tab==1?MP.afr:MP.ign,dec=MP.tab==0?2:1;
+ ctx.save();ctx.beginPath();ctx.rect(TL+HW,TT+HH,TR-TL-HW,TB-TT-HH);ctx.clip();
+ for(let i=0;i<MP.rows;i++){const r=MP.rows-1-i,y=TT+HH+i*CH-MP.sy;if(y+CH<TT+HH||y>TB)continue;
+  for(let c=0;c<MP.cols;c++){const x=TL+HW+c*CW-MP.sx;if(x+CW<TL+HW||x>TR)continue;
+   if(!MP.has[r][c]){ctx.fillStyle="#0a0e16";ctx.fillRect(x+2,y+2,CW-4,CH-4);N("--",x+CW/2,y+CH/2,txt,"#323e56");continue}
+   const v=V[r][c],cc=cellCol(v);ctx.fillStyle=hexA(cc,.31);ctx.fillRect(x+2,y+2,CW-4,CH-4);ctx.lineWidth=1.2;ctx.strokeStyle=hexA(cc,.6);ctx.strokeRect(x+2,y+2,CW-4,CH-4);
+   N(v.toFixed(dec),x+CW/2,y+CH/2,txt,"#fff")}}
+ if(MP.curR>=0){const i=MP.rows-1-MP.curR,y=TT+HH+i*CH-MP.sy,x=TL+HW+MP.curC*CW-MP.sx;ctx.fillStyle="rgba(255,255,255,.06)";ctx.fillRect(TL+HW,y,TR-TL-HW,CH);ctx.fillRect(x,TT+HH,CW,TB-TT-HH);
+  ctx.shadowColor="#fff";ctx.shadowBlur=12;ctx.lineWidth=4;ctx.strokeStyle="#fff";ctx.strokeRect(x-1,y-1,CW+2,CH+2);ctx.shadowBlur=0}
+ ctx.restore();
+ ctx.fillStyle="#060a12";ctx.fillRect(TL,TT,TR-TL,HH);ctx.fillRect(TL,TT,HW,TB-TT);
+ ctx.save();ctx.beginPath();ctx.rect(TL+HW,TT,TR-TL-HW,HH);ctx.clip();
+ for(let c=0;c<MP.cols;c++){const x=TL+HW+c*CW-MP.sx;N(MP.tps[c].toFixed(1),x+CW/2,TT+HH/2,txt*.95,c==MP.curC?LIME:acc)}ctx.restore();
+ ctx.save();ctx.beginPath();ctx.rect(TL,TT+HH,HW,TB-TT-HH);ctx.clip();
+ for(let i=0;i<MP.rows;i++){const r=MP.rows-1-i,y=TT+HH+i*CH-MP.sy;N(String(MP.rpm[r]),TL+HW-10,y+CH/2,txt,r==MP.curR?LIME:acc,"right")}ctx.restore();
+ T("รอบ\\TPS",TL+HW/2,TT+HH/2,16,MUTE)}
+function mapTap(x,y){const inR=q=>x>=q[0]-6&&x<=q[2]+6&&y>=q[1]-8&&y<=q[3]+8;
+ for(let i=0;i<3;i++){const l=TABX+i*(TABW+TABG);if(inR([l,TABT,l+TABW,TABB])){MP.tab=i;return}}
+ if(inR(BF)){MP.follow=!MP.follow;if(MP.follow)mapToCursor();return}
+ if(inR(BLD)){MP.status="กำลังโหลด...";mapReq();return}
+ if(inR(BCL)){if(confirm("ล้างตาราง AFR / หัวฉีด / องศา ที่เกจเก็บไว้ทั้งหมด?\n(ไม่เกี่ยวกับกล่อง ECU)")){MP.status="กำลังล้าง...";cmd("C")}}}
+const EMPTY={rpm:NaN,spd:NaN,tps:NaN,ect:NaN,iat:NaN,map:NaN,afr:NaN,ign:NaN,inj:NaN,bat:NaN,o2:NaN,isc:NaN,mil:-1};
+// เข็ม/แถบ ไหลลื่นระหว่างค่าที่มาทุก 0.1 วิ (ตัวเลขยังเป็นค่าจริง)
+const SM={},SMK=["rpm","spd","tps","afr"];let smT=0;
+function smooth(v){const now=performance.now(),dt=Math.min(.1,(now-smT)/1000||0);smT=now;if(v===EMPTY)return v;
+ const k=1-Math.exp(-dt/.06),o=Object.assign({},v);
+ for(const n of SMK){const x=v[n];if(isNaN(x)||isNaN(SM[n])||SM[n]==null)SM[n]=x;else SM[n]+=(x-SM[n])*k;o[n+"S"]=SM[n]}
+ return o}
+function frameLoop(){relayout();const live=smooth(D&&Date.now()-lastOk<2500?D:EMPTY);ctx.clearRect(0,0,W,H);
+ bgImg.style.visibility=page==0?"visible":"hidden";
+ if(page==0)drawDash(live);else if(page==1)drawData(live);else if(page==2)drawDtc();else drawMap();
+ const[s,c]=status();const st=document.getElementById("st");if(st.textContent!==s)st.textContent=s;document.getElementById("dot").style.background=c;
+ requestAnimationFrame(frameLoop)}
+
+// ---------- แตะ ----------
+let pd=null;
+cv.addEventListener("pointerdown",e=>{const r=cv.getBoundingClientRect();pd={x:e.clientX,y:e.clientY,sx:MP.sx,sy:MP.sy,moved:false,r};cv.setPointerCapture(e.pointerId)});
+cv.addEventListener("pointermove",e=>{if(!pd)return;const dx=e.clientX-pd.x,dy=e.clientY-pd.y;if(Math.abs(dx)+Math.abs(dy)>8)pd.moved=true;
+ if(page==3&&pd.moved){MP.sx=pd.sx-dx/sc;MP.sy=pd.sy-dy/sc;MP.follow=false;mapClamp()}});
+cv.addEventListener("pointerup",e=>{if(!pd)return;const p=pd;pd=null;if(p.moved)return;
+ const x=(e.clientX-p.r.left)/sc,y=(e.clientY-p.r.top)/sc,inR=(q)=>x>=q[0]-8&&x<=q[2]+8&&y>=q[1]-8&&y<=q[3]+8;
+ if(page==0&&x>=1222&&x<=1792&&y>=314&&y<=532)openTop();
+ if(page==2){if(inR(BR))readDtc();else if(inR(BC))clearDtc()}
+ if(page==3)mapTap(x,y)});
+cv.addEventListener("pointercancel",()=>pd=null);
+cv.style.touchAction="none";
+document.querySelectorAll("[data-p]").forEach(b=>b.onclick=()=>{const np=+b.dataset.p;
+ if(np==3&&page!=3){if(!MP.rows)MP.status="กำลังโหลด...";mapReq()}
+ if(np!=3&&page==3)cmd("m");
+ page=np;document.querySelectorAll("[data-p]").forEach(x=>x.classList.toggle("on",x===b))});
+const ov=document.getElementById("ov"),pn=document.getElementById("pn");
+ov.addEventListener("click",e=>{if(e.target===ov)ov.style.display="none"});
+function openTop(){const dt=TOP.at?new Date(TOP.at):null;
+ pn.innerHTML=`<h2>TOP SPEED</h2><div style="text-align:center;font:700 italic 96px SG,sans-serif">${TOP.spd>0?fmt(TOP.spd,0):"--"}<span style="font-size:26px;color:#cfd8e3"> km/h</span></div>
+ <div class="row"><div class="t">รอบตอนท็อป</div><b>${fmt(TOP.rpm,0)}</b></div><div class="row"><div class="t">AFR ตอนท็อป</div><b style="color:${isNaN(TOP.afr)?MUTE:afrZ(TOP.afr)}">${fmt(TOP.afr,1)}</b></div>
+ <div class="row"><div class="t">วันที่ / เวลา</div><b>${dt?dt.toLocaleDateString("th-TH")+"  "+dt.toLocaleTimeString("th-TH",{hour:"2-digit",minute:"2-digit"}):"--"}</b></div>
+ <div class="btns"><button class="b" id="tc" style="border-color:#ff3b47">ลบข้อมูล</button><button class="b on" id="tx">ปิด</button></div>`;
+ ov.style.display="flex";pn.querySelector("#tx").onclick=()=>ov.style.display="none";
+ pn.querySelector("#tc").onclick=()=>{if(confirm("ลบความเร็วสูงสุดที่บันทึกไว้?")){TOP={spd:0,rpm:NaN,afr:NaN,at:0};saveTop();openTop()}}}
+function openMenu(){
+ const st=(k,lab,sub,step,min,maxv)=>`<div class="row"><div class="t">${lab}<small>${sub}</small></div><div class="st"><button class="b" data-k="${k}" data-d="-${step}" data-mn="${min}" data-mx="${maxv}">−</button><span id="v_${k}">${S[k]}</span><button class="b" data-k="${k}" data-d="${step}" data-mn="${min}" data-mx="${maxv}">+</button></div></div>`;
+ pn.innerHTML=`<h2>ตั้งค่า</h2>
+ <div class="row"><div class="t">สีธีม<small>เปลี่ยนสีกรอบ เกจ และปุ่ม</small></div>${THEMES.map((t,i)=>`<button class="chip ${i==S.th?"on":""}" data-t="${i}" style="background:${t[1]}">${i==S.th?"✓":""}</button>`).join("")}</div>
+ ${st("max","รอบสูงสุดของเกจ","ตัวเลขสุดท้ายบนหน้าปัด",1000,8000,16000)}${st("red","รอบเริ่มโซนแดง","เกินรอบนี้เป็นสีแดง",250,4000,16000)}${st("warn","เตือนเครื่องร้อน (°C)","น้ำถึงค่านี้ ขึ้นแถบแดงกะพริบ",1,80,130)}
+ <div class="row"><div class="t">TOP SPEED<small>ดูรายละเอียด / ลบข้อมูล</small></div><button class="b" id="mt">เปิด ›</button></div>
+ <div class="btns"><button class="b" id="mr">คืนค่าเริ่มต้น</button><button class="b on" id="mx">ปิด</button></div>
+ <div style="margin-top:12px;font-size:12px;color:#8fa3c0">กดแชร์ → "เพิ่มไปยังหน้าจอโฮม" เพื่อเปิดเต็มจอครั้งต่อไป  •  ต้องต่อ WiFi ของเกจก่อนเปิด</div>`;
+ ov.style.display="flex";
+ pn.querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{S.th=+b.dataset.t;saveS();applyTheme();openMenu()});
+ pn.querySelectorAll("[data-k]").forEach(b=>b.onclick=()=>{const k=b.dataset.k;S[k]=Math.max(+b.dataset.mn,Math.min(+b.dataset.mx,S[k]+ +b.dataset.d));
+  if(S.red>S.max)S.red=S.max;saveS();pn.querySelector("#v_max").textContent=S.max;pn.querySelector("#v_red").textContent=S.red;pn.querySelector("#v_warn").textContent=S.warn});
+ pn.querySelector("#mt").onclick=openTop;pn.querySelector("#mx").onclick=()=>ov.style.display="none";
+ pn.querySelector("#mr").onclick=()=>{S.max=12000;S.red=9500;S.warn=105;saveS();openMenu()}}
+document.getElementById("bm").onclick=openMenu;
+
+layout();(document.fonts?document.fonts.ready:Promise.resolve()).then(layout);
+if(VIA_BLE){document.getElementById("bleb").onclick=bleConnect;bleUi(navigator.bluetooth?null:"");if(!navigator.bluetooth)bleConnect()}
+else{openStream();pollLive();pollMsg()}
+requestAnimationFrame(frameLoop);
+// บลูทูธ: หน้าตารางเงียบเกิน 4 วิ -> ขอตารางใหม่เอง
+if(VIA_BLE)setInterval(()=>{if(bOn&&page==3&&Date.now()-MP.last>4000&&Date.now()-MP.req>4000){if(!MP.rows)MP.status="กำลังโหลด...";mapReq()}},1000);
+</script></body></html>
